@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>企鹅回顶 · 测试台</title>
+<style>
+  body { margin: 0; font: 14px/1.6 system-ui, sans-serif; background: #20222b; color: #ddd; }
+  #toolbar { padding: 8px 12px; background: #2a2d3a; }
+  #chat_sheld { display: flex; justify-content: center; }
+  /* 中间再垫一层非滚动容器，验证 scrollIntoView 能自己解析滚动链 */
+  #form_sheld { width: min(720px, 90vw); }
+  #chat { height: 75vh; overflow-y: auto; background: #191a22; padding: 8px; box-sizing: border-box; }
+  .mes { border: 1px solid #34374a; border-radius: 8px; margin: 8px 0; padding: 10px; box-sizing: border-box; }
+  .mes .card { background: #232636; border-radius: 6px; margin-top: 8px; }
+  #result { position: fixed; right: 12px; top: 12px; padding: 10px 14px; border-radius: 8px; font-weight: bold; z-index: 9; }
+  .pass { background: #1d4d2b; }
+  .fail { background: #5a1f1f; }
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <span id="mode-label"></span>
+  <button onclick="runTest()">重跑测试</button>
+</div>
+<div id="chat_sheld"><div id="form_sheld"><div id="chat"></div></div></div>
+<div id="result">等待测试…</div>
+
+<script>
+// ---------- 酒馆助手环境 mock（先于被测脚本加载） ----------
+window.tavern_events = {
+  GENERATION_ENDED: 'GENERATION_ENDED',
+  GENERATION_STARTED: 'GENERATION_STARTED',
+  MESSAGE_SENT: 'MESSAGE_SENT',
+  CHAT_CHANGED: 'CHAT_CHANGED',
+  CHARACTER_MESSAGE_RENDERED: 'CHARACTER_MESSAGE_RENDERED',
+};
+window.iframe_events = { MESSAGE_IFRAME_RENDER_ENDED: 'MESSAGE_IFRAME_RENDER_ENDED' };
+
+(function makeBus() {
+  const listeners = new Map();
+  window.eventOn = (ev, cb) => {
+    if (typeof ev !== 'string') {           // getButtonEvent 返回的 EventTarget
+      ev.addEventListener('click', cb);
+      return { stop() { ev.removeEventListener('click', cb); } };
+    }
+    if (!listeners.has(ev)) listeners.set(ev, new Set());
+    listeners.get(ev).add(cb);
+    return { stop() { listeners.get(ev).delete(cb); } };
+  };
+  window.fire = (ev, arg) => (listeners.get(ev) || new Set()).forEach(cb => cb(arg));
+})();
+
+window.getButtonEvent = (name) => (getButtonEvent.targets ||= {})[name] ||= new EventTarget();
+window.eventOnButton = (name, cb) => window.eventOn(getButtonEvent(name), cb);
+window.triggerSlash = (cmd) => console.log('[mock triggerSlash]', cmd);
+
+// ---------- 测试逻辑 ----------
+const chat = document.getElementById('chat');
+let nextId = 0;
+const results = [];
+window.__results = results;  // 供自动化读取
+
+function addFloor(bodyHeight, withCard) {
+  const mes = document.createElement('div');
+  mes.className = 'mes';
+  mes.setAttribute('mesid', String(nextId));
+  mes.innerHTML = '<div>楼层 ' + nextId + ' 顶部标记</div>';
+  const body = document.createElement('div');
+  body.style.height = bodyHeight + 'px';
+  mes.appendChild(body);
+  if (withCard) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.height = '200px';
+    mes.appendChild(card);
+    mes.growCard = () => { card.style.height = parseInt(card.style.height, 10) + 300 + 'px'; };
+  }
+  chat.appendChild(mes);
+  return nextId++;
+}
+
+function bottom() { chat.scrollTop = chat.scrollHeight; }
+function topOf(id) {
+  return chat.querySelector('.mes[mesid="' + id + '"]').getBoundingClientRect().top
+       - chat.getBoundingClientRect().top;
+}
+function check(name, ok, detail) {
+  results.push({ name, ok, detail });
+  console.log((ok ? 'PASS' : 'FAIL') + ' | ' + name + ' | ' + detail);
+}
+
+// 控制台捕获，供自动化读取脚本自身日志
+window.__logs = [];
+['log', 'warn', 'error'].forEach(level => {
+  const orig = console[level].bind(console);
+  console[level] = (...args) => {
+    window.__logs.push(level + ': ' + args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' '));
+    if (window.__logs.length > 80) window.__logs.shift();
+    orig(...args);
+  };
+});
+function btn() { return getButtonEvent('企鹅回顶'); }
+function clickBtn() { btn().dispatchEvent(new Event('click')); }
+
+function runTest() {
+  results.length = 0;
+  nextId = 0;
+  chat.innerHTML = '';
+  localStorage.removeItem('penguin_scroll_top3.mode');
+  document.getElementById('result').textContent = '测试中…';
+  document.getElementById('result').className = '';
+
+  for (let i = 0; i < 5; i++) addFloor(420);
+  bottom();
+
+  // 用例 1：生成结束后回顶，无视卡片长高与酒馆滚底
+  // （酒馆核心的 GENERATION_ENDED 不带 message_id，回顶目标靠"最后一楼"兜底）
+  setTimeout(() => {
+    const id = addFloor(950, true);
+    bottom();
+    window.fire(tavern_events.GENERATION_ENDED);
+    setTimeout(() => { chat.lastElementChild.growCard(); bottom(); }, 900);   // 卡片渲染撑高
+    setTimeout(() => { chat.lastElementChild.growCard(); bottom(); }, 1600);  // 酒馆再次滚底
+    setTimeout(() => {
+      const d = topOf(id);
+      check('生成结束后回顶（无视卡片长高与滚底）', Math.abs(d) <= 2, '楼层顶距 #chat 顶 ' + d.toFixed(1) + 'px');
+      done();
+    }, 3000);
+  }, 300);
+
+  // 用例 2：双击切换为手动模式并持久化；手动模式下生成不回顶
+  setTimeout(() => {
+    clickBtn(); clickBtn();  // 双击
+    const mode = localStorage.getItem('penguin_scroll_top3.mode');
+    check('双击切换为手动模式并持久化', mode === 'manual', 'localStorage=' + mode);
+    document.getElementById('mode-label').textContent = '当前模式：' + mode;
+
+    const id = addFloor(500);
+    bottom();
+    const d0 = topOf(id);
+    window.fire(tavern_events.GENERATION_ENDED);
+    setTimeout(() => {
+      const d = topOf(id);
+      check('手动模式下生成后不滚动', Math.abs(d - d0) <= 2, '位置未变，偏差 ' + (d - d0).toFixed(1) + 'px');
+      clickBtn(); clickBtn();  // 切回自动
+      document.getElementById('mode-label').textContent = '当前模式：auto';
+      done();
+    }, 1200);
+  }, 4200);
+
+  // 用例 3：单击按钮手动回顶到最后一楼
+  setTimeout(() => {
+    const d0 = topOf(nextId - 1);
+    chat.scrollTop = chat.scrollHeight;  // 先滚离顶部
+    window.__trace3 = [{ t: 'click', top: topOf(nextId - 1), scroll: chat.scrollTop }];
+    clickBtn();
+    [200, 500, 1000].forEach(ms => setTimeout(() => {
+      window.__trace3.push({ t: '+' + ms, top: +topOf(nextId - 1).toFixed(1), scroll: Math.round(chat.scrollTop) });
+    }, ms));
+    setTimeout(() => {
+      const d = topOf(nextId - 1);
+      // 最后一楼不足一屏时楼顶物理上到不了容器顶（scrollTop 被钳制），到达最底即为极限位置
+      const atMax = chat.scrollHeight - chat.clientHeight - chat.scrollTop <= 2;
+      check('单击按钮回顶到最后一楼', Math.abs(d) <= 2 || atMax,
+        '偏差 ' + d.toFixed(1) + 'px（点击前 ' + d0.toFixed(1) + 'px），距可滚底端 ' + (chat.scrollHeight - chat.clientHeight - chat.scrollTop).toFixed(1) + 'px');
+      done();
+    }, 1000);
+  }, 6800);
+
+  // 用例 4：重 roll 旧楼层（CHARACTER_MESSAGE_RENDERED 钉定目标，不锚到最后一楼）
+  setTimeout(() => {
+    window.fire(tavern_events.CHARACTER_MESSAGE_RENDERED, 3);
+    window.fire(tavern_events.GENERATION_ENDED);
+    setTimeout(() => {
+      const d = topOf(3);
+      check('重 roll 旧楼层时锚定该楼层', Math.abs(d) <= 2, '楼层 3 顶距 #chat 顶 ' + d.toFixed(1) + 'px');
+      done();
+    }, 1200);
+  }, 8300);
+}
+
+let doneCount = 0;
+function done() {
+  if (++doneCount < 4) return;
+  const fail = results.filter(r => !r.ok);
+  const el = document.getElementById('result');
+  el.textContent = fail.length ? 'FAIL ' + fail.length + '/' + results.length : 'PASS ' + results.length + '/' + results.length;
+  el.className = fail.length ? 'fail' : 'pass';
+  console.log(fail.length ? '测试失败' : '全部通过');
+}
+window.addEventListener('load', runTest);
+</script>
+<script src="../src/penguin-scroll-top.js"></script>
+</body>
+</html>

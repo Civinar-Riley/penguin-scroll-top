@@ -1,0 +1,11 @@
+{
+  "name": "penguin-scroll-top",
+  "private": true,
+  "version": "3.1.0",
+  "type": "module",
+  "description": "SillyTavern 酒馆助手脚本：AI 生成结束后自动回到当前楼层顶部（企鹅回顶）",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node scripts/serve.mjs"
+  }
+}
