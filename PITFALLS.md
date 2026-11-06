@@ -48,3 +48,11 @@
 - **现象**：第一版测试页 `results` 只存 `{name, ok}`，用例失败后只能加日志重跑一遍才拿到数值。
 - **正确做法**：结果对象一开始就带上 detail（数值、现场快照），控制台再挂一个环形缓冲捕获脚本自身日志——失败时一次取全，不用二轮重跑。
 
+## 8. Release 附件用中文文件名会被 GitHub 上传接口清洗掉
+
+- **现象**：`gh release upload` 传 `酒馆助手脚本-企鹅生成后回顶3.json`，服务器上的资产名变成 `-.3.json`（中文全被剥掉）。换 pwsh 7 传、node fetch 直调 REST 接口（手工 percent-encode 和让 fetch 自行编码都试了）、沙箱内外各跑一遍，结果全部一致——清洗发生在 GitHub uploads 端点侧，不是客户端编码问题。
+- **连带坑**：`-.3.json` 以 `-` 开头，`gh release delete-asset` 把它当旗标解析直接报错，删不掉；要走 `gh api -X DELETE .../releases/assets/<id>` 按数字 id 删。
+- **验证手段**：别信终端回显（会吞非 ASCII，看着像好的其实可能是坏的），用 `gh api` + jq 断言 `(.assets[].name | length)` 和与期望串的相等性。本机对 `github.com` 直连超时（`api.github.com` 却通），下载可达性没法本机 HEAD 验证，只能信 API 返回的 `state=uploaded` 和 size。
+- **正确做法**：release 附件名直接用 ASCII（如 `penguin-scroll-top-v3.1.0.json`），中文脚本名在 JSON 元数据里，不受影响。
+
+
