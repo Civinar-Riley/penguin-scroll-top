@@ -1,0 +1,22 @@
+{
+  "type": "script",
+  "enabled": true,
+  "name": "企鹅生成后回顶3-CDN加载器",
+  "id": "5222fd9d-19a6-42bc-8123-84ae641dd177",
+  "info": "**脚本名称**：企鹅生成后回顶3\n**按钮**：「企鹅回顶」\n- **单击**：手动回顶到当前楼层顶部，并短暂锚定约 2 秒。\n- **400 毫秒内连点两下**：切换 自动回顶 / 手动回顶 模式，状态持久保存，默认自动。\n**自动模式**：AI 生成结束后自动回到当前楼层顶部，并在约 6 秒内持续锚定（每 80 毫秒校正一次）\n**说明**：重 roll 旧楼层时锚定该楼层；最后一楼不足一屏时楼顶到不了视口顶（浏览器滚动钳制），会停在最接近的位置。\n\n作者：西维纳尔\n\n**CDN 加载器版**：本脚本内容只有一行 import，实时从 jsDelivr 拉取仓库 main 分支的脚本本体（`src/penguin-scroll-top.js`）；仓库更新后无需重新导入（CDN 缓存最长约 12 小时），断网或 jsDelivr 不可达时不生效。与自包含版功能完全相同，**不要同时启用两个**（会出现两个「企鹅回顶」按钮）。",
+  "button": {
+    "enabled": true,
+    "buttons": [
+      {
+        "name": "企鹅回顶",
+        "visible": true
+      }
+    ]
+  },
+  "data": {},
+  "export_with": {
+    "data": true,
+    "button": true
+  },
+  "content": "import('https://cdn.jsdelivr.net/gh/Civinar-Riley/st-penguin-scroll-top@main/src/penguin-scroll-top.js').catch(function (e) {\n    console.error('[企鹅生成后回顶3] CDN 加载失败（断网或 jsDelivr 不可达），本脚本暂不生效：', e);\n});"
+}

@@ -13,6 +13,10 @@
       }
     ]
   },
+  "cdn": {
+    "suffix": "-CDN加载器",
+    "info_note": "\n\n**CDN 加载器版**：本脚本内容只有一行 import，实时从 jsDelivr 拉取仓库 main 分支的脚本本体（`src/penguin-scroll-top.js`）；仓库更新后无需重新导入（CDN 缓存最长约 12 小时），断网或 jsDelivr 不可达时不生效。与自包含版功能完全相同，**不要同时启用两个**（会出现两个「企鹅回顶」按钮）。"
+  },
   "data": {},
   "export_with": {
     "data": true,
